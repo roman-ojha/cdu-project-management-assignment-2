@@ -6,22 +6,22 @@ from typing import Dict, List, Tuple
 import pandas as pd
 import numpy as np
 
-
-TEMPERATURES_FOLDER = "temperatures"
-OUTPUT_SEASONAL = "average_temp.txt"
-
-
+# months present in CSV in this exact order (from sample CSV)
 MONTHS = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
 ]
 
+# mapping month -> season (Australian)
 MONTH_TO_SEASON = {
     "December": "Summer", "January": "Summer", "February": "Summer",
     "March": "Autumn", "April": "Autumn", "May": "Autumn",
     "June": "Winter", "July": "Winter", "August": "Winter",
     "September": "Spring", "October": "Spring", "November": "Spring",
 }
+
+# rounding for outputs
+ROUND_DECIMALS = 1
 
 
 def find_csv_files(folder: str) -> List[str]:
@@ -109,40 +109,72 @@ def compute_seasonal_average(long_df: pd.DataFrame) -> Dict[str, float]:
     season_mean = long_df.groupby("Season", observed=True)[
         "Temperature"].mean()
 
-    # Ensure ordering in result as Summer, Autumn, Winter, Spring
-    # seasons_order = ["Summer", "Autumn", "Winter", "Spring"]
-    # results = {}
-    # for s in seasons_order:
-    #     if s in season_mean.index:
-    #         results[s] = float(season_mean.loc[s])
-    #     else:
-    #         results[s] = float("nan")
     return season_mean
+
+
+def compute_largest_temperature_range(long_df: pd.DataFrame):
+    # grouping by station. using both name and id in grouping key to avoid same station merges
+    group_cols = []
+    if "STATION_NAME" in long_df.columns:
+        group_cols.append("STATION_NAME")
+    if "STN_ID" in long_df.columns:
+        group_cols.append("STN_ID")
+
+    # dropping rows that have NaN temperature before computing
+    df_valid = long_df.dropna(subset=["Temperature"])
+    agg = df_valid.groupby(group_cols, observed=True)[
+        "Temperature"].agg(["max", "min"]).reset_index()
+    if agg.empty:
+        return []
+
+    agg["range"] = agg["max"] - agg["min"]
+    max_range = agg["range"].max()
+    winners = agg[agg["range"] == max_range]
+
+    results = []
+    for _, row in winners.iterrows():
+        name = row.get("STATION_NAME", "")
+        stn_id = str(row.get("STN_ID", "")) if "STN_ID" in row.index else ""
+        results.append((name, stn_id, float(
+            row["range"]), float(row["max"]), float(row["min"])))
+    return results
 
 
 def format_temperature(value: float) -> str:
     """
-    Format a temperature float to one decimal place with degree C suffix.
+    Format a temperature float to one decimal place.
     Handles NaN by returning 'NaN°C'.
     """
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return "NaN°C"
-    return f"{round(value, 1):.{1}f}°C"
+    return f"{round(value, ROUND_DECIMALS):.{ROUND_DECIMALS}f}°C"
 
 
-def write_seasonal_average(results: Dict[str, float], outpath: str = OUTPUT_SEASONAL) -> None:
-    """
-    Write season averages to file with one season per line, e.g.:
-       Summer: 28.5°C
-    """
-    with open(outpath, "w", encoding="utf-8") as fh:
+def write_seasonal_average(results: Dict[str, float]) -> None:
+    OUTPUT_SEASONAL = "average_temp.txt"
+    with open(OUTPUT_SEASONAL, "w", encoding="utf-8") as fh:
         for season, val in results.items():
             fh.write(f"{season}: {format_temperature(val)}\n")
-    print(f"Wrote seasonal averages to: {outpath}")
+    print(f"Wrote seasonal averages to: {OUTPUT_SEASONAL}")
+
+
+def write_largest_range(results) -> None:
+    OUTPUT_RANGE = "largest_temp_range_station.txt"
+    with open(OUTPUT_RANGE, "w", encoding="utf-8") as fh:
+        if not results:
+            fh.write("No data available\n")
+            return
+        for name, stn_id, rng, mx, mn in results:
+            label = f"{name}" + \
+                (f" (ID {stn_id})" if stn_id and stn_id != "nan" else "")
+            fh.write(
+                f"{label}: Range {format_temperature(rng)} (Max: {format_temperature(mx)}, Min: {format_temperature(mn)})\n")
+    print(f"Wrote largest temperature range station(s) to: {OUTPUT_RANGE}")
 
 
 def main():
     # 1) find CSV files
+    TEMPERATURES_FOLDER = "temperatures"
     files = find_csv_files(TEMPERATURES_FOLDER)
 
     # 2) load and concat
@@ -153,7 +185,11 @@ def main():
 
     # 4) seasonal averages
     seasonal = compute_seasonal_average(long_df)
-    write_seasonal_average(seasonal, OUTPUT_SEASONAL)
+    write_seasonal_average(seasonal)
+
+    # # 5) largest temperature range
+    largest_ranges = compute_largest_temperature_range(long_df)
+    write_largest_range(largest_ranges)
 
 
 if __name__ == "__main__":
