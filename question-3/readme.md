@@ -33,6 +33,7 @@ The recursion depth controls the complexity of the final drawing.
 3. Run the program:
 
 python main.py
+
 4. Enter the requested values when prompted:
 - Number of sides (minimum 3)
 - Side length (greater than 0)
