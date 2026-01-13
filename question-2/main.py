@@ -8,6 +8,8 @@ import numpy as np
 
 
 TEMPERATURES_FOLDER = "temperatures"
+OUTPUT_SEASONAL = "average_temp.txt"
+
 
 MONTHS = [
     "January", "February", "March", "April", "May", "June",
@@ -23,24 +25,12 @@ MONTH_TO_SEASON = {
 
 
 def find_csv_files(folder: str) -> List[str]:
-    """
-    Return list of CSV file paths in the given folder. Uses glob to match *.csv.
-    """
     pattern = os.path.join(folder, "*.csv")
     files = sorted(glob.glob(pattern))
     return files
 
 
 def load_and_concat_csv(files: List[str]) -> pd.DataFrame:
-    """
-    Load CSV files into a single DataFrame.
-
-    Each CSV is expected to contain columns:
-    STATION_NAME, STN_ID, LAT, LON, January, February, ..., December
-
-    Adds a 'SOURCE_FILE' column set to the filename (useful for debugging).
-    Returns concatenated DataFrame.
-    """
     parts = []
     for fpath in files:
         try:
@@ -86,12 +76,6 @@ def load_and_concat_csv(files: List[str]) -> pd.DataFrame:
 
 
 def melt_months_to_long(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert wide table (one row per station with 12 month columns) to long format:
-    columns: STATION_NAME, STN_ID, LAT, LON, month, temperature, SOURCE_FILE, SOURCE_YEAR
-
-    Temperatures are converted to numeric and NaNs are preserved for later ignoring.
-    """
     id_vars = [c for c in ("STATION_NAME", "STN_ID", "LAT",
                            "LON", "SOURCE_FILE", "SOURCE_YEAR") if c in df.columns]
     long = df.melt(id_vars=id_vars, value_vars=MONTHS,
@@ -117,11 +101,6 @@ def melt_months_to_long(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_seasonal_average(long_df: pd.DataFrame) -> Dict[str, float]:
-    """
-    Compute average temperature for each Australian season across ALL stations and ALL years.
-
-    Returns a dict season -> seasonal_avg (float).
-    """
     # map months to seasons
     long_df = long_df.copy()
     long_df["Season"] = long_df["Month"].map(MONTH_TO_SEASON)
@@ -141,8 +120,28 @@ def compute_seasonal_average(long_df: pd.DataFrame) -> Dict[str, float]:
     return season_mean
 
 
-def main():
+def format_temperature(value: float) -> str:
+    """
+    Format a temperature float to one decimal place with degree C suffix.
+    Handles NaN by returning 'NaN°C'.
+    """
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return "NaN°C"
+    return f"{round(value, 1):.{1}f}°C"
 
+
+def write_seasonal_average(results: Dict[str, float], outpath: str = OUTPUT_SEASONAL) -> None:
+    """
+    Write season averages to file with one season per line, e.g.:
+       Summer: 28.5°C
+    """
+    with open(outpath, "w", encoding="utf-8") as fh:
+        for season, val in results.items():
+            fh.write(f"{season}: {format_temperature(val)}\n")
+    print(f"Wrote seasonal averages to: {outpath}")
+
+
+def main():
     # 1) find CSV files
     files = find_csv_files(TEMPERATURES_FOLDER)
 
@@ -154,7 +153,7 @@ def main():
 
     # 4) seasonal averages
     seasonal = compute_seasonal_average(long_df)
-    print(seasonal)
+    write_seasonal_average(seasonal, OUTPUT_SEASONAL)
 
 
 if __name__ == "__main__":
