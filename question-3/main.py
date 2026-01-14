@@ -79,7 +79,7 @@ def main():
         draw_recursive_edge(t, length, depth)
         t.right(exterior_angle)
 
-    print("Pattern complete. Click the window to close.")
+    print("Successfully drew the pattern.")
     screen.exitonclick()
 
 
