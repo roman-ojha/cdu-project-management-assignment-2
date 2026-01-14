@@ -37,10 +37,11 @@ def draw_recursive_polygon(sides, side_length, depth):
 
     # Rough centering
     t.penup()
-    t.goto(-side_length / 2.0, side_length / 3.0)
+    t.goto(-side_length / 2, side_length / 3)
     t.pendown()
 
-    exterior_angle = 360.0 / sides
+    exterior_angle = 360 / sides
+    
     for _ in range(sides):
         draw_inward_indent_edge(t, side_length, depth)
         t.left(exterior_angle)
