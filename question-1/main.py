@@ -37,7 +37,26 @@ def encrypt_text():
 
 
 def decrypt_text():
-    pass
+    """
+    We will decrypt the text stored in encrypted_text.txt file using the shifts stored in shifts.txt file.
+    Store the decrypted text into decrypted_text.txt file.
+    """
+    # Reading encrypted text
+    with open("encrypted_text.txt", "r", encoding="utf-8") as f:
+        encrypted = f.read()
+
+    # Reading shifts from shifts.txt
+    with open("shifts.txt", "r", encoding="utf-8") as f:
+        shift = list(map(int, f.read().split()))
+    decrypted = ""
+    for c, s in zip(encrypted, shift):
+        decrypted += chr((ord(c) - s) % 256)
+
+    # Store decrypted text
+    with open("decrypted_text.txt", "w", encoding="utf-8") as f:
+        f.write(decrypted)
+
+    print("Successfully decrypted")
 
 
 def main():
